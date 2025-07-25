@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LSC Tuning Rechner V10</title>
+    <title>LSC Tuning Rechner V11</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -35,8 +35,10 @@
 
     <div class="max-w-7xl mx-auto">
         <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-white">LSC Tuning Rechner V10</h1>
-            <p class="text-gray-400 mt-2">Mit einklappbaren Kategorien.</p>
+            <!-- HINWEIS: Ersetze die 'src' mit dem Link zu deinem Logo -->
+            <img src="strokemaster.png" alt="Strokemaster Logo" class="mx-auto mb-4 h-24" onerror="this.style.display='none'">
+            <h1 class="text-4xl font-bold text-white">Strokemaster Tuning Rechner</h1>
+            <p class="text-gray-400 mt-2">Mit einklappbaren Kategorien und Notizen.</p>
         </header>
 
         <!-- Tab Navigation -->
@@ -236,9 +238,24 @@
                     { name: "L = 25-75%", prices: [3000, 3500, 4000, 4500, 5000], time: 8 },
                     { name: "L > 75%", prices: [3500, 4000, 4500, 5000, 5500], time: 12 },
             ]},
-            { category: "Felgen & Reifen", type: 'checkbox', options: [
-                    { id: 'felgentyp', name: 'Felgentyp', prices: [2500, 3750, 4250, 5250, 7250], time: 0.5 },
-                    { id: 'felgenfarbe', name: 'Felgenfarbe', prices: [1000, 1500, 1500, 2000, 2000], time: 1 },
+            { category: "Felgen & Reifen", options: [
+                 {
+                    type: 'select',
+                    id: 'felgentyp',
+                    name: 'Felgentyp',
+                    options: Array.from({length: 12}, (_, i) => ({
+                        name: `Typ ${i + 1}`,
+                        prices: [2500, 3750, 4250, 5250, 7250],
+                        time: 0.5
+                    }))
+                },
+                {
+                    type: 'color',
+                    id: 'felgenfarbe',
+                    name: 'Felgenfarbe',
+                    prices: [1000, 1500, 1500, 2000, 2000],
+                    time: 1
+                }
             ]},
             { category: "Beleuchtung", type: 'checkbox', options: [
                     { id: 'xenon', name: 'Xenon', prices: [400, 800, 1200, 1800, 2400], time: 1 },
@@ -265,6 +282,13 @@
             ]},
             { category: "Leistungstuning", options: [
                 {
+                    type: 'checkbox',
+                    id: 'turbolader',
+                    name: 'Turbolader',
+                    prices: [12000, 16750, 19900, 22050, 25900],
+                    time: 72
+                },
+                {
                     type: 'select',
                     id: 'motor',
                     name: 'Motorstufen',
@@ -280,13 +304,6 @@
                         { name: "Stufe 0 auf 3 (+3)", prices: [15450, 21050, 24850, 27250, 30950], time: 72 },
                         { name: "Stufe 1 auf 3 (+2)", prices: [11450, 15850, 18650, 20500, 22750], time: 48 },
                     ]
-                },
-                {
-                    type: 'checkbox',
-                    id: 'turbolader',
-                    name: 'Turbolader',
-                    prices: [12000, 16750, 19900, 22050, 25900],
-                    time: 72
                 },
                 {
                     type: 'select',
@@ -388,7 +405,7 @@
                     if (opt.type === 'select') {
                         return createSelectHTML(opt, category.category);
                     } else { // 'checkbox' and 'color'
-                        return createCheckboxHTML(opt, opt.type);
+                        return createCheckboxHTML(opt, opt.type, category.category);
                     }
                 }).join('');
 
@@ -427,16 +444,22 @@
             addEventListenersToOptions();
         }
         
-        function createCheckboxHTML(opt, type) {
-            let additionalInput = '';
+        function createCheckboxHTML(opt, type, categoryName) {
+            let noteInput = '';
+            if (!['Leistungstuning', 'Tieferlegung'].includes(categoryName)) {
+                noteInput = `<input type="text" id="opt-${opt.id}-note" placeholder="Notiz" class="p-2 w-24 text-sm tuning-option-extra">`;
+            }
+
+            let colorInput = '';
             if (type === 'color') {
-                additionalInput = `<input type="text" id="opt-${opt.id}-color" placeholder="Farb-Nr." class="p-2 w-24 text-sm tuning-option-extra">`;
+                colorInput = `<input type="text" id="opt-${opt.id}-color" placeholder="Farb-Nr." class="p-2 w-24 text-sm tuning-option-extra">`;
             }
             return `
                 <div class="flex items-center justify-between p-2 rounded-md hover:bg-gray-700/50">
                     <label for="opt-${opt.id}" class="flex-grow cursor-pointer">${opt.name}</label>
                     <div class="flex items-center gap-2">
-                        ${additionalInput}
+                        ${noteInput}
+                        ${colorInput}
                         <input type="checkbox" id="opt-${opt.id}" class="w-5 h-5 tuning-option" data-type="checkbox" data-id="${opt.id}">
                     </div>
                 </div>`;
@@ -503,7 +526,15 @@
                     let name = optionData.name;
                     const colorInput = document.getElementById(`opt-${optionId}-color`);
                     if (colorInput && colorInput.value) name += ` (#${colorInput.value.trim()})`;
-                    parts.push({ name, price: optionData.prices[priceTier], time: optionData.time, colorCode: colorInput ? colorInput.value.trim() : null });
+                    
+                    const noteInput = document.getElementById(`opt-${optionId}-note`);
+                    let note = null;
+                    if (noteInput && noteInput.value) {
+                        note = noteInput.value.trim();
+                        name += ` (${note})`;
+                    }
+                    
+                    parts.push({ name, price: optionData.prices[priceTier], time: optionData.time, colorCode: colorInput ? colorInput.value.trim() : null, note });
                 }
             });
             document.querySelectorAll('.tuning-option[data-type="select"]').forEach(select => {
