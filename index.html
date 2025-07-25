@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LSC Tuning Rechner V10</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; color: #e5e7eb; }
+        .card { background-color: #1f2937; border-radius: 0.75rem; border: 1px solid #374151; padding: 1.5rem; margin-bottom: 1.5rem; }
+        .summary-card { background-color: #1f2937; border-radius: 0.75rem; border: 1px solid #4f46e5; padding: 1.5rem; position: sticky; top: 1.5rem; }
+        input[type="checkbox"] { accent-color: #4f46e5; }
+        select, input[type="text"], input[type="number"] { background-color: #374151; border: 1px solid #4b5563; color: #e5e7eb; border-radius: 0.375rem; }
+        .rechnung-item { display: flex; justify-content: space-between; padding: 0.5rem 0; border-bottom: 1px solid #374151; }
+        .rechnung-item:last-child { border-bottom: none; }
+        .action-button { background-color: #4f46e5; transition: background-color 0.3s; }
+        .action-button:hover { background-color: #4338ca; }
+        .delete-button { background-color: #ef4444; }
+        .delete-button:hover { background-color: #dc2626; }
+        .reset-button { background-color: #6b7280; }
+        .reset-button:hover { background-color: #4b5563; }
+        .profit-positive { color: #22c55e; }
+        .profit-negative { color: #ef4444; }
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: #1f2937; padding: 2rem; border-radius: 0.75rem; width: 90%; max-width: 600px; border: 1px solid #4f46e5; }
+        .tab-button { background-color: #374151; padding: 0.75rem 1.5rem; border-radius: 0.5rem; transition: background-color 0.3s; }
+        .tab-button.active { background-color: #4f46e5; color: white; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .price-input { width: 6rem; padding: 0.25rem 0.5rem; text-align: right; }
+    </style>
+</head>
+<body class="p-6">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-white">LSC Tuning Rechner V10</h1>
+            <p class="text-gray-400 mt-2">Mit einklappbaren Kategorien.</p>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="mb-8 flex justify-center gap-4 flex-wrap">
+            <button class="tab-button active" data-tab="rechner">Rechner</button>
+            <button class="tab-button" data-tab="abholbereit">Abholbereit</button>
+            <button class="tab-button" data-tab="kunden">Kunden</button>
+            <button class="tab-button" data-tab="mitarbeiter">Mitarbeiter</button>
+            <button class="tab-button" data-tab="finanzen">Finanzen</button>
+            <button class="tab-button" data-tab="archiv">Archiv</button>
+            <button class="tab-button" data-tab="preise">Preisverwaltung</button>
+        </div>
+
+        <!-- Tab Content -->
+        <div id="rechner" class="tab-content active">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2">
+                    <form id="auftrags-form">
+                        <div class="card">
+                            <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Auftragsdaten</h2>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <select id="kunden-select" class="p-2 w-full"></select>
+                                <select id="fahrzeug-select" class="p-2 w-full"></select>
+                            </div>
+                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                <select id="mitarbeiter-select" class="p-2 w-full"></select>
+                                <div class="flex items-center">
+                                    <input type="number" id="rabatt-input" placeholder="Rabatt" class="p-2 w-full" min="0" max="100">
+                                    <span class="ml-2 text-gray-400">%</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="tuning-options"></div>
+                    </form>
+                </div>
+                <div class="lg:col-span-1">
+                    <div class="summary-card">
+                        <h2 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Rechnung</h2>
+                        <div id="rechnung-items" class="mb-4 max-h-80 overflow-y-auto">
+                            <p class="text-gray-400">Bitte Fahrzeug & Tuningteile auswählen...</p>
+                        </div>
+                        <div class="border-t-2 border-gray-600 pt-4 space-y-2">
+                            <div class="flex justify-between text-md"><span>Zwischensumme:</span><span id="zwischensumme-preis">$0</span></div>
+                            <div class="flex justify-between text-md text-orange-400"><span>Rabatt:</span><span id="rabatt-betrag">$0</span></div>
+                            <div class="flex justify-between text-2xl font-bold text-green-400"><span>Gesamtpreis:</span><span id="gesamt-preis">$0</span></div>
+                            <div class="flex justify-between text-lg font-bold mt-2"><span>Gesamtzeit:</span><span id="gesamt-zeit">0 h</span></div>
+                        </div>
+                        <div class="flex gap-2 mt-6">
+                             <button id="reset-button" type="button" class="w-full p-3 rounded-lg text-white font-bold reset-button">Reset</button>
+                            <button id="book-button" type="button" class="w-full p-3 rounded-lg text-white font-bold action-button">Tuning verbuchen</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="abholbereit" class="tab-content">
+            <h2 class="text-3xl font-bold text-white mb-4">Abholbereite Fahrzeuge</h2>
+            <div class="bg-gray-800 rounded-lg overflow-hidden"><div class="overflow-x-auto">
+                <table class="w-full text-left"><thead class="bg-gray-700 text-xs text-gray-300 uppercase tracking-wider">
+                    <tr><th class="p-3">Re-Nr.</th><th class="p-3">Kunde</th><th class="p-3">Fahrzeug</th><th class="p-3">Abholzeit</th><th class="p-3">Details</th></tr>
+                </thead><tbody id="abholbereit-tabelle" class="divide-y divide-gray-700"></tbody></table>
+            </div></div>
+        </div>
+
+        <div id="kunden" class="tab-content">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-1">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4" id="customer-form-title">Neuen Kunden anlegen</h3>
+                        <form id="add-customer-form" class="space-y-4">
+                            <input type="hidden" id="customer-edit-index">
+                            <input type="text" id="new-customer-name" placeholder="Name des Kunden" class="p-2 w-full" required>
+                            <input type="text" id="new-customer-phone" placeholder="Telefonnummer" class="p-2 w-full">
+                            <input type="number" id="new-customer-discount" placeholder="Standard-Rabatt in %" class="p-2 w-full" min="0" max="100">
+                            <button type="submit" id="customer-submit-button" class="w-full p-2 rounded-lg text-white font-bold action-button">Kunden hinzufügen</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <div class="bg-gray-800 rounded-lg overflow-hidden"><div class="overflow-x-auto">
+                        <table class="w-full text-left"><thead class="bg-gray-700 text-xs text-gray-300 uppercase tracking-wider">
+                            <tr><th class="p-3">Name</th><th class="p-3">Telefon</th><th class="p-3">Rabatt</th><th class="p-3">Aktionen</th></tr>
+                        </thead><tbody id="customer-table" class="divide-y divide-gray-700"></tbody></table>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mitarbeiter" class="tab-content">
+             <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-1">
+                    <div class="card">
+                        <h3 class="text-xl font-semibold mb-4" id="employee-form-title">Neuen Mitarbeiter anlegen</h3>
+                        <form id="add-employee-form" class="space-y-4">
+                            <input type="hidden" id="employee-edit-index">
+                            <input type="text" id="new-employee-name" placeholder="Name des Mitarbeiters" class="p-2 w-full" required>
+                            <button type="submit" id="employee-submit-button" class="w-full p-2 rounded-lg text-white font-bold action-button">Mitarbeiter hinzufügen</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <div class="bg-gray-800 rounded-lg overflow-hidden"><div class="overflow-x-auto">
+                        <table class="w-full text-left"><thead class="bg-gray-700 text-xs text-gray-300 uppercase tracking-wider">
+                            <tr><th class="p-3">Name</th><th class="p-3">Aktionen</th></tr>
+                        </thead><tbody id="employee-table" class="divide-y divide-gray-700"></tbody></table>
+                    </div></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="finanzen" class="tab-content">
+            <h2 class="text-3xl font-bold text-white mb-4">Finanzübersicht</h2>
+            <div class="bg-gray-800 rounded-lg overflow-hidden"><div class="overflow-x-auto">
+                <table class="w-full text-left"><thead class="bg-gray-700 text-xs text-gray-300 uppercase tracking-wider">
+                    <tr><th class="p-3">Re-Nr.</th><th class="p-3">Datum</th><th class="p-3">Mitarbeiter</th><th class="p-3">Einnahmen</th><th class="p-3">Gewinn</th><th class="p-3">Details</th></tr>
+                </thead><tbody id="finanz-tabelle" class="divide-y divide-gray-700"></tbody></table>
+            </div></div>
+        </div>
+
+        <div id="archiv" class="tab-content">
+            <h2 class="text-3xl font-bold text-white mb-4">Auftragsarchiv</h2>
+            <div class="bg-gray-800 rounded-lg overflow-hidden"><div class="overflow-x-auto">
+                <table class="w-full text-left"><thead class="bg-gray-700 text-xs text-gray-300 uppercase tracking-wider">
+                    <tr><th class="p-3">Re-Nr.</th><th class="p-3">Kunde</th><th class="p-3">Fahrzeug</th><th class="p-3">Abholzeit</th><th class="p-3">Gesamtpreis</th><th class="p-3">Details</th></tr>
+                </thead><tbody id="archiv-tabelle" class="divide-y divide-gray-700"></tbody></table>
+            </div></div>
+        </div>
+        
+        <div id="preise" class="tab-content">
+            <div class="card">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-3xl font-bold text-white">Preisverwaltung</h2>
+                    <button id="save-all-prices-button" class="p-3 rounded-lg text-white font-bold action-button">Alle Preise speichern</button>
+                </div>
+
+                <!-- Fahrzeugpreise -->
+                <div class="mb-8">
+                    <h3 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Fahrzeugpreise</h3>
+                    <input type="text" id="car-price-search" placeholder="Fahrzeug suchen..." class="p-2 w-full mb-4">
+                    <div id="car-prices-container" class="max-h-96 overflow-y-auto space-y-2"></div>
+                </div>
+
+                <!-- Teilepreise -->
+                <div>
+                    <h3 class="text-2xl font-semibold mb-4 border-b border-gray-600 pb-2">Teilepreise</h3>
+                    <div id="part-prices-container" class="space-y-6"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="modal-overlay hidden">
+        <div class="modal-content"><div class="flex justify-between items-center mb-4">
+                <h2 class="text-2xl font-bold" id="modal-title">Auftragsdetails</h2>
+                <button id="modal-close-button" class="text-2xl">&times;</button>
+            </div><div id="modal-body" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <script>
+        // --- KONFIGURATION ---
+        const FESTE_AUSGABEN = 6000;
+
+        // --- DATENBANKEN (Initialwerte) ---
+        const initialCarDatabase = {'10f':{name:'10F',price:137500},'10f2widebody':{name:'10F 2 / Widebody',price:163900},'190z':{name:'190z',price:27500},'8fdrafter':{name:'8F Drafter',price:71500},'adder':{name:'adder',price:220000},'akuma':{name:'Akuma',price:42900},'aleutian':{name:'aleutian',price:60500},'alpha':{name:'Alpha',price:55000},'arbitergt':{name:'Arbiter GT',price:30000},'asbo':{name:'Asbo',price:4000},'asea':{name:'Asea',price:7000},'asterope':{name:'Asterope',price:16500},'asterope2':{name:'Asterope2',price:26400},'avarus':{name:'Avarus',price:27500},'bagger':{name:'Bagger',price:30800},'baller':{name:'baller',price:42900},'baller2':{name:'baller2',price:53900},'baller3':{name:'baller3',price:53900},'baller7st':{name:'baller7 (ST)',price:66000},'banshee':{name:'Banshee',price:121000},'bansheegts':{name:'Banshee GTS',price:160000},'bati':{name:'Bati',price:60500},'bestiagts':{name:'bestiagts',price:82500},'bf400':{name:'BF400',price:18700},'bifta':{name:'bifta',price:22000},'bison':{name:'Bison',price:23100},'bjxlbeejayxl':{name:'BJXL / BeeJay XL',price:30800},'blade':{name:'Blade',price:25000},'blista':{name: 'Blista', price: 6000},'boor':{name:'boor',price:13200},'brawler':{name:'brawler',price:66000},'brioso':{name:'Brioso',price:20900},'briosora':{name:'Brioso R/A',price:35000},'buccaneer':{name:'Buccaneer',price:17600},'buffalo':{name:'Buffalo',price:30800},'buffalo2':{name:'buffalo2',price:48180},'buffalo4':{name:'Buffalo4',price:77000},'buffalo5evx':{name:'Buffalo5 (EVX)',price:60000},'caddygolf':{name:'Caddy (Golf)',price:25000},'calico':{name:'Calico',price:60500},'camper':{name:'Camper',price:44000},'caracara2':{name:'Caracara2',price:71500},'carbonrs':{name:'carbonrs',price:31900},'castiagator':{name:'Castiagator',price:60000},'cavalcade':{name:'cavalcade',price:41800},'cavalcade2':{name:'cavalcade2',price:46200},'cavalcade3xl':{name:'Cavalcade3 (XL)',price:71500},'champion':{name:'champion',price:93500},'chavosv6':{name:'Chavos v6',price:49500},'cheburek':{name:'cheburek',price:5500},'cheetah2':{name:'cheetah2',price:99000},'chimera':{name:'Chimera',price:19800},'chino':{name:'Chino',price:11000},'cinquemila':{name:'Cinquemila',price:132000},'cliffhanger':{name:'Cliffhanger',price:99000},'club':{name:'club',price:4000},'cognoscenticabrio':{name:'Cognoscenti Cabrio',price:66000},'comet2':{name:'Comet2',price:93500},'comet3':{name:'Comet3',price:165000},'comet5':{name:'Comet5',price:110000},'comet6':{name:'Comet6',price:137500},'comet7':{name:'Comet7',price:143000},'contender':{name:'Contender',price:64900},'coquette':{name:'Coquette',price:77000},'coquette2':{name:'coquette2',price:66000},'coquette3':{name:'coquette3',price:82500},'coquette4':{name:'Coquette4',price:143000},'coquette6':{name:'coquette6',price:121000},'corsita':{name:'Corsita',price:121000},'coureurlacoureuse':{name:'coureur/La Coureuse',price:66000},'cyclone2':{name:'Cyclone 2',price:180000},'cypher':{name:'Cypher',price:66000},'daemon2':{name:'Daemon2',price:24200},'defiler':{name:'Defiler',price:38500},'deity':{name:'Deity',price:550000},'devesteeight':{name:'Deveste Eight',price:180000},'diablous':{name:'diablous',price:25300},'dilettante':{name:'Dilettante',price:5500},'dominator':{name:'Dominator',price:39600},'dominatorgtx':{name:'Dominator GTX',price:39500},'dominator10fx':{name:'Dominator10 / FX',price:42900},'dominator7asp':{name:'Dominator7 / ASP',price:38500},'dominator8gtt':{name:'Dominator8 / GTT',price:36300},'dominator9gt':{name:'Dominator9 / GT',price:66000},'dorado':{name:'dorado',price:42900},'doublet':{name:'Double T',price:33000},'driftcheburek':{name:'driftcheburek',price:18700},'driftcypher':{name:'driftcypher',price:90200},'drifteuros':{name:'drifteuros',price:77000},'driftfr36':{name:'driftfr36',price:69300},'driftfuto':{name:'driftfuto',price:31900},'driftjester':{name:'driftjester',price:137500},'driftjester3':{name:'driftjester3',price:69300},'driftnebula':{name:'driftnebula',price:44000},'driftremus':{name:'driftremus',price:33000},'driftsentinel':{name:'driftsentinel',price:58300},'drifttampa':{name:'drifttampa',price:110000},'driftvorschlag':{name:'driftvorschlag',price:93500},'driftyosemite':{name:'driftyosemite',price:36300},'driftzr350':{name:'driftzr350',price:64900},'dubsta':{name:'dubsta',price:77000},'dubsta2':{name:'Dubsta2',price:92500},'dubsta3':{name:'Dubsta3',price:170500},'dukes':{name:'Dukes',price:9900},'dynasty':{name:'Dynasty',price:24200},'elegy':{name:'Elegy',price:60500},'elegy2rh8':{name:'Elegy2 / RH8',price:82500},'ellie':{name:'Ellie',price:31900},'emerus':{name:'Emerus',price:181500},'emporer':{name:'Emporer',price:5000},'enduro':{name:'Enduro',price:6600},'entitymt':{name:'Entity MT',price:201000},'envisage':{name:'envisage',price:71500},'esskey':{name:'Esskey',price:9900},'euros':{name:'Euros',price:49500},'eurosx32':{name:'eurosx32',price:36300},'everon':{name:'everon',price:49500},'exemplar':{name:'exemplar',price:66000},'f620':{name:'F620',price:55000},'faction':{name:'Faction',price:15400},'faction2':{name:'Faction2',price:25300},'fagaloa':{name:'Fagaloa',price:35000},'faggio2':{name:'Faggio2',price:3300},'faggio3':{name:'Faggio3',price:3300},'felon':{name:'Felon',price:41800},'felon2':{name:'Felon2',price:41800},'feltzer2':{name:'feltzer2',price:49500},'fireboltasp':{name:'Firebolt ASP',price:49500},'flatbed':{name:'Flatbed',price:60000},'fmj':{name:'FMJ',price:143000},'fq2':{name:'fq2',price:44000},'fr36':{name:'Fr36',price:41800},'freecrawler':{name:'freecrawler',price:55000},'fugitive':{name:'Fugitive',price:42900},'furia':{name:'furia',price:176000},'futo':{name:'Futo',price:15400},'gargoyle':{name:'Gargoyle',price:20900},'gauntlet3':{name:'Gauntlet3',price:22000},'gb200':{name:'gb200',price:53900},'glendale':{name:'Glendale',price:12100},'glendale2':{name:'Glendale2',price:20350},'granger':{name:'granger',price:55000},'granger2':{name:'Granger2',price:82500},'greenwood':{name:'Greenwood',price:24200},'growler':{name:'Growler',price:126500},'gt500':{name:'GT500',price:93500},'hakuchou':{name:'Hakuchou',price:64900},'hakuchoudrag':{name:'Hakuchou DRAG',price:80000},'hardy':{name:'Hardy',price:10000},'hellion':{name:'Hellion',price:37400},'hexer':{name:'Hexer',price:9350},'iwagen':{name:'I-wagen',price:110000},'impaler5':{name:'Impaler5',price:22000},'imperial':{name:'Imperial',price:50000},'infernus2':{name:'infernus2',price:132000},'ingot':{name:'Ingot',price:6000},'innovation':{name:'Innovation',price:33000},'intruder':{name:'Intruder',price:19800},'issi2':{name:'Issi2',price:22000},'issi7sports':{name:'Issi7 / Sports',price:66000},'issi8ralley':{name:'issi8 / Ralley',price:71500},'italigtostingertt':{name:'Itali GTO Stinger TT',price:180000},'italigtb':{name:'ItaliGTB',price:170500},'italigto':{name:'Italigto',price:220000},'jackal':{name:'Jackal',price:55000},'jester':{name:'Jester',price:88000},'jester3':{name:'Jester3',price:41800},'jester4':{name:'Jester4',price:104500},'journey2':{name:'Journey2',price:11000},'kanjoblista':{name:'kanjo (Blista)',price:9900},'komoda':{name:'Komoda',price:100100},'kuruma':{name:'Kuruma',price:55000},'landstalker2xl':{name:'Landstalker2 / XL',price:61600},'lectro':{name:'Lectro',price:8800},'lspdbuffalostx':{name:'LSPD (Buffalo STX)',price:80000},'lynx':{name:'Lynx',price:143000},'mamba':{name:'Mamba',price:55000},'manana':{name:'Manana',price:16500},'manchez':{name:'Manchez',price:16500},'manchez2scout':{name:'Manchez2 (Scout)',price:33000},'massacro':{name:'Massacro',price:71500},'michelligt':{name:'michelli GT',price:17600},'minivan':{name:'Minivan',price:13200},'minivan2custom':{name:'Minivan2 / Custom',price:24200},'monstrociti':{name:'MonstroCiti',price:44000},'moonbeam':{name:'Moonbeam',price:18700},'moonbeam2':{name:'Moonbeam2',price:29700},'ncavalcade':{name:'Ncavalcade',price:110000},'nemesis':{name:'Nemesis',price:15400},'neo':{name:'Neo',price:187000},'neon_car':{name:'Neon',price:198000},'nero':{name:'nero',price:220000},'nightblade':{name:'Nightblade',price:550000},'nightshade':{name:'Nightshade',price:16500},'niobe':{name:'Niobe',price:180000},'novak':{name:'Novak',price:60500},'omnisegt':{name:'omnisegt',price:121000},'oracle':{name:'Oracle',price:26400},'oracle2':{name:'Oracle2',price:26400},'osiris':{name:'osiris',price:176000},'paradise':{name:'Paradise',price:45000},'paragonr':{name:'Paragon R',price:159500},'paragon3s':{name:'Paragon3 / S',price:209000},'pariah':{name:'Pariah',price:143000},'patriot':{name:'Patriot',price:49500},'penumbra':{name:'Penumbra',price:15400},'penumbra2ff':{name:'Penumbra2 / FF',price:27500},'peyote':{name:'Peyote',price:15400},'phantom':{name:'phantom',price:220000},'phnixmusclecar':{name:'Phönix (Muscle Car)',price:30000},'powersurge':{name:'Powersurge',price:55000},'prairie':{name:'Prairie',price:18700},'previon':{name:'Previon',price:16500},'primo':{name:'Primo',price:13200},'primo2custom':{name:'Primo2 / Custom',price:22000},'r300':{name:'r300',price:71500},'radius':{name:'Radius',price:42900},'raiden':{name:'Raiden',price:99000},'rampantrocket':{name:'Rampant Rocket',price:41800},'rancherxl':{name:'RancherXL',price:17600},'rapidgt':{name:'rapid gt',price:49500},'rapidgt3gtx':{name:'rapid gt3 / GTX',price:42900},'reaper':{name:'Reaper',price:143000},'rebelrusty':{name:'rebel Rusty',price:5500},'rebel2':{name:'Rebel2',price:16500},'rebla':{name:'Rebla',price:55000},'reever':{name:'Reever',price:41800},'remus':{name:'Remus',price:16500},'retinue':{name:'retinue',price:16500},'rhapsody':{name:'Rhapsody',price:9000},'rhinehart':{name:'rhinehart',price:71500},'riata':{name:'Riata',price:34100},'rocoto':{name:'Rocoto',price:42900},'rt3000':{name:'RT3000',price:23100},'ruffian':{name:'Ruffian',price:22000},'ruiner4':{name:'ruiner4',price:33000},'ruston':{name:'ruston',price:71500},'s95':{name:'S95',price:80000},'sabregt':{name: 'SabreGT',price:25300},'sabregt2':{name:'SabreGT2',price:41800},'sadler':{name:'Sadler',price:19800},'sanchez2':{name:'Sanchez2',price:25300},'sandking':{name:'Sandking',price:88000},'sandking2':{name:'Sandking2',price:66000},'savestra':{name:'Savestra',price:30800},'schafter2':{name:'schafter2',price:60500},'schafter3v12':{name:'Schafter3/V12',price:88000},'schafter4lwb':{name:'schafter4 /LWB',price:82500},'schlagengt':{name:'Schlagen GT',price:121000},'schwartzer':{name:'Schwartzer',price:42900},'seminole':{name:'seminole',price:38500},'seminole2':{name:'Seminole2',price:35200},'sentinelxs':{name:'sentinel xs',price:39600},'sentinel4sentinelclassicwidebody':{name:'Sentinel4 (Sentinel Classic Widebody)',price:52800},'sentinel5gts':{name:'Sentinel5 (GTS)',price:110000},'seven70':{name:'seven70',price:110000},'sheavaetr1':{name:'sheava / ETR1',price:154000},'shinobi':{name:'Shinobi',price:82500},'slamvan':{name:'Slamvan',price:16500},'sovereign':{name:'Sovereign',price:16500},'specter':{name:'specter',price:49500},'stafford':{name:'stafford',price:275000},'stanier':{name:'Stanier',price:10000},'stingertt':{name:'Stingertt',price:143000},'stirlinggt':{name:'stirlinggt',price:187000},'stratum':{name:'Stratum',price:26400},'stryder':{name:'Stryder',price:15400},'sugoi':{name:'Sugoi',price:26400},'sultan':{name:'Sultan',price:60500},'sultanclassic':{name:'Sultan Classic',price:104500},'sultan3':{name:'Sultan3',price:66000},'sultanrs':{name:'Sultanrs',price:77000},'surfer':{name:'Surfer',price:4400},'t20':{name:'T20',price:203500},'tahomamodkarre':{name:'tahoma / Mod Karre',price:16500},'tailgater':{name:'Tailgater',price:34100},'tailgater2s':{name:'Tailgater2 / S',price:40700},'tampagt':{name:'Tampa GT',price:60000},'tempesta':{name:'Tempesta',price:181500},'tempesta3':{name:'Tempesta3',price:291500},'terminus':{name:'terminus',price:82500},'thrust':{name:'Thrust',price:38500},'torero':{name:'torero',price:143000},'torero2xo':{name:'torero2 / XO',price:198000},'tornado':{name:'Tornado',price:16500},'toros':{name:'Toros',price:165000},'tulip':{name:'Tulip',price:22000},'turismoclassic':{name:'Turismo Classic',price:150000},'turismo2classic':{name:'turismo2 / Classic',price:110000},'turismor':{name:'TurismoR',price:176000},'uranuslozspeed':{name:'uranus LozSpeed',price:36300},'vacca':{name:'Vacca',price:154000},'vader':{name:'Vader',price:22000},'vectre':{name:'Vectre',price:60500},'verlierer2':{name:'verlierer2',price:77000},'vigeroclassic':{name:'Vigero Classic',price:0},'vigerozxcabrio':{name:'Vigero ZX Cabrio',price:80000},'vigero2zx':{name:'Vigero2 / ZX',price:77000},'vindicator':{name:'Vindicator',price:23100},'virgo':{name:'Virgo',price:17600},'virgo3classic':{name:'Virgo3 / Classic',price:16500},'viseris':{name:'viseris',price:61600},'visione':{name:'visione',price:209000},'vivanite':{name: 'Vivanite',price:49500},'voodoo2':{name:'voodoo2',price:4400},'vorschlaghammer':{name:'vorschlaghammer',price:71500},'vortex':{name:'vortex',price:30800},'vstr':{name:'Vstr',price:82500},'waltonl35':{name:'Walton L35',price:31900},'warrener':{name:'Warrener',price:28600},'washington':{name:'Washington',price:16500},'weevil':{name:'Weevil',price:12100},'weevil2customs':{name:'Weevil2 / Customs',price:55000},'windsor':{name:'Windsor',price:176000},'windsor2drop':{name:'Windsor2 / Drop',price:225500},'wolfsbane':{name:'Wolfsbane',price:12100},'woodlander':{name:'Woodlander',price:50000},'xa21':{name:'xa21',price:280500},'yosemite':{name:'Yosemite',price:18700},'yosemite1500':{name:'yosemite1500',price:82500},'youga':{name:'Youga',price:13200},'youga2':{name:'Youga2',price:13200},'zentorno':{name:'zentorno',price:275000},'zion':{name: 'Zion', price: 42900},'zion2cabrio':{name:'Zion2 / Cabrio',price:42900},'zion3classic':{name:'Zion3 / Classic',price:31900},'zombiea':{name:'ZombieA',price:30800},'zombieb':{name:'ZombieB',price:31900},'zorrusso':{name:'Zorrusso',price:176000},'zr350':{name:'ZR350',price:42900},'gauntlethellfire':{name:'Gauntlet Hellfire',price:40000},'postlude':{name:'Postlude',price:4000},};
+        
+        const initialTuningData = [
+            { category: "Lackierung & Design", type: 'color', options: [
+                    { id: 'primärfarbe', name: 'Primärfarbe', prices: [2500, 3000, 3500, 4000, 5000], time: 12 },
+                    { id: 'sekundärfarbe', name: 'Sekundärfarbe', prices: [1000, 1500, 2000, 2500, 3500], time: 12 },
+                    { id: 'perleffekt', name: 'Perleffekt', prices: [500, 800, 1000, 1200, 1500], time: 1 },
+                    { id: 'hilfsfarbe', name: 'Hilfsfarbe', prices: [0,0,0,0,0], time: 0}, // Preis unklar, als 0 gesetzt
+            ]},
+            { category: "Speziallackierung", type: 'checkbox', options: [
+                    { id: 'chrome', name: 'Chrome', prices: [4500, 5000, 5500, 7000, 8000], time: 12 },
+                    { id: 'chameleon', name: 'Chameleon', prices: [4000, 5500, 7000, 7000, 8000], time: 12 },
+                    { id: 'sekundaerchrome', name: 'Sekundär Chrome', prices: [1000, 1000, 1000, 1000, 1000], time: 12 },
+                    { id: 'sekundaerchameleon', name: 'Sekundär Chameleon', prices: [1000, 1000, 1000, 1000, 1000], time: 12 },
+            ]},
+            { category: "Anbauteile", type: 'checkbox', options: [
+                    { id: 'spoiler', name: 'Spoiler', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'frontstossstange', name: 'Vordere Stoßstange', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'heckstossstange', name: 'Hintere Stoßstange', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'seitenverkleidung', name: 'Seitenverkleidung', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'auspuff', name: 'Auspuff', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'rahmen', name: 'Rahmen', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'gitter', name: 'Gitter', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'motorhaube', name: 'Motorhaube', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'kotfluegellinks', name: 'Linker Kotflügel', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'kotfluegelrechts', name: 'Rechter Kotflügel', prices: [300, 350, 400, 450, 550], time: 0.5 },
+                    { id: 'dach', name: 'Dach', prices: [300, 350, 400, 450, 550], time: 0.5 },
+            ]},
+            { category: "Livery", type: 'select', options: [
+                    { name: "L < 25%", prices: [1000, 1200, 1500, 2000, 2200], time: 2 },
+                    { name: "L = 25-75%", prices: [3000, 3500, 4000, 4500, 5000], time: 8 },
+                    { name: "L > 75%", prices: [3500, 4000, 4500, 5000, 5500], time: 12 },
+            ]},
+            { category: "Felgen & Reifen", type: 'checkbox', options: [
+                    { id: 'felgentyp', name: 'Felgentyp', prices: [2500, 3750, 4250, 5250, 7250], time: 0.5 },
+                    { id: 'felgenfarbe', name: 'Felgenfarbe', prices: [1000, 1500, 1500, 2000, 2000], time: 1 },
+            ]},
+            { category: "Beleuchtung", type: 'checkbox', options: [
+                    { id: 'xenon', name: 'Xenon', prices: [400, 800, 1200, 1800, 2400], time: 1 },
+                    { id: 'neon', name: 'Neon', prices: [2000, 2500, 3000, 3500, 4000], time: 2 },
+            ]},
+            { category: "Extras", type: 'checkbox', options: [
+                    { id: 'kennzeichenhalter', name: 'Kennzeichenhalter', prices: [150, 200, 250, 300, 400], time: 0.5 },
+                    { id: 'tacho', name: 'Tacho', prices: [100, 150, 200, 250, 300], time: 0.5 },
+                    { id: 'fenstertoenung', name: 'Fenstertönung', prices: [300, 400, 400, 500, 500], time: 0.5 },
+                    { id: 'kennzeichen', name: 'Kennzeichen', prices: [150, 200, 250, 300, 400], time: 0.5 },
+                    { id: 'motorblock', name: 'Motorblock', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'luftfilter', name: 'Luftfilter', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'verkleidung', name: 'Verkleidung', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'lenkrad', name: 'Lenkrad', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'amaturenbrett', name: 'Amaturenbrett', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'tuerlautsprecher', name: 'Türlautsprecher', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'sitze', name: 'Sitze', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'streben', name: 'Streben', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'abdeckung', name: 'Abdeckung', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'antenne', name: 'Antenne', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'verkleidung_farbe', name: 'Verkleidung Farbe', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'fenster', name: 'Fenster', prices: [200, 300, 400, 500, 500], time: 0.5 },
+                    { id: 'unknown', name: 'Unknown', prices: [200, 300, 400, 500, 500], time: 0.5 },
+            ]},
+            { category: "Leistungstuning", options: [
+                {
+                    type: 'select',
+                    id: 'motor',
+                    name: 'Motorstufen',
+                    options: [
+                        { name: "Stufe -1 auf 0 (+1)", prices: [2500, 3750, 4500, 5300, 6500], time: 24 },
+                        { name: "Stufe 0 auf 1 (+1)", prices: [4000, 5200, 6200, 6750, 8200], time: 24 },
+                        { name: "Stufe 1 auf 2 (+1)", prices: [5500, 7800, 9200, 10000, 11200], time: 24 },
+                        { name: "Stufe 2 auf 3 (+1)", prices: [5950, 8050, 9450, 10500, 11550], time: 24 },
+                        { name: "Stufe -1 auf 1 (+2)", prices: [6500, 8950, 10700, 12050, 14700], time: 48 },
+                        { name: "Stufe -1 auf 2 (+3)", prices: [12000, 16750, 19900, 22050, 25900], time: 72 },
+                        { name: "Stufe -1 auf 3 (+4)", prices: [17950, 24800, 29350, 32550, 37450], time: 86 },
+                        { name: "Stufe 0 auf 2 (+2)", prices: [9500, 13000, 15400, 16750, 19400], time: 48 },
+                        { name: "Stufe 0 auf 3 (+3)", prices: [15450, 21050, 24850, 27250, 30950], time: 72 },
+                        { name: "Stufe 1 auf 3 (+2)", prices: [11450, 15850, 18650, 20500, 22750], time: 48 },
+                    ]
+                },
+                {
+                    type: 'checkbox',
+                    id: 'turbolader',
+                    name: 'Turbolader',
+                    prices: [12000, 16750, 19900, 22050, 25900],
+                    time: 72
+                },
+                {
+                    type: 'select',
+                    id: 'bremsen',
+                    name: 'Bremsstufen',
+                    options: [
+                        { name: "Stufe -1 auf 0 (+1)", prices: [800, 800, 1200, 1600, 2200], time: 6 },
+                        { name: "Stufe 0 auf 1 (+1)", prices: [833, 1000, 1333, 1750, 2333], time: 6 },
+                        { name: "Stufe 1 auf 2 (+1)", prices: [866, 1200, 1466, 1900, 2466], time: 6 },
+                        { name: "Stufe -1 auf 1 (+2)", prices: [1633, 1800, 2533, 3350, 4533], time: 9 },
+                        { name: "Stufe -1 auf 2 (+3)", prices: [2499, 3000, 3999, 5250, 6999], time: 12 },
+                        { name: "Stufe 0 auf 2 (+2)", prices: [1699, 2200, 2799, 3650, 4799], time: 9 },
+                    ]
+                },
+                 {
+                    type: 'select',
+                    id: 'getriebe',
+                    name: 'Getriebestufen',
+                    options: [
+                        { name: "Stufe -1 auf 0 (+1)", prices: [1225, 1600, 2000, 2300, 2800], time: 12 },
+                        { name: "Stufe 0 auf 1 (+1)", prices: [1850, 2100, 2600, 2800, 3400], time: 12 },
+                        { name: "Stufe 1 auf 2 (+1)", prices: [2200, 3200, 4000, 4300, 4800], time: 12 },
+                        { name: "Stufe -1 auf 1 (+2)", prices: [3075, 3700, 4600, 5100, 6200], time: 24 },
+                        { name: "Stufe -1 auf 2 (+3)", prices: [5275, 6900, 8600, 9400, 11000], time: 36 },
+                        { name: "Stufe 0 auf 2 (+2)", prices: [4050, 5300, 6600, 7100, 8200], time: 24 },
+                    ]
+                }
+            ]},
+            { category: "Tieferlegung", type: 'select', options: [
+                    { name: "Stufe -1 auf 0 (+1)", prices: [250, 375, 450, 600, 850], time: 12 }, { name: "Stufe 0 auf 1 (+1)", prices: [250, 375, 450, 600, 850], time: 12 },
+                    { name: "Stufe 1 auf 2 (+1)", prices: [250, 375, 450, 600, 850], time: 12 }, { name: "Stufe 2 auf 3 (+1)", prices: [250, 375, 450, 600, 850], time: 12 },
+                    { name: "Stufe -1 auf 1 (+2)", prices: [500, 750, 900, 1200, 1700], time: 24 }, { name: "Stufe -1 auf 2 (+3)", prices: [750, 1125, 1350, 1800, 2550], time: 36 },
+                    { name: "Stufe -1 auf 3 (+4)", prices: [1000, 1500, 1800, 2400, 3400], time: 48 }, { name: "Stufe 0 auf 2 (+2)", prices: [500, 750, 900, 1200, 1700], time: 24 },
+                    { name: "Stufe 0 auf 3 (+3)", prices: [750, 1125, 1350, 1800, 2550], time: 36 }, { name: "Stufe 1 auf 3 (+2)", prices: [500, 750, 900, 1200, 1700], time: 24 },
+            ]}
+        ];
+        
+        // --- GLOBALE VARIABLEN ---
+        const allInputs = {};
+        
+        // --- FUNKTIONEN ---
+        
+        // Local Storage Functions
+        const ls = {
+            get: (key, fallback = []) => JSON.parse(localStorage.getItem(key)) || fallback,
+            set: (key, value) => localStorage.setItem(key, JSON.stringify(value))
+        };
+
+        function getVehiclePriceTier(price) {
+            if (price >= 200000) return 4;
+            if (price >= 150000) return 3;
+            if (price >= 100000) return 2;
+            if (price >= 50000) return 1;
+            return 0;
+        }
+
+        function populateAllDropdowns() {
+            // Cars
+            const carData = ls.get('lsc_carDatabase');
+            const sortedCars = Object.values(carData).sort((a, b) => a.name.localeCompare(b.name));
+            allInputs.fahrzeugSelect.innerHTML = '<option value="">-- Fahrzeug auswählen --</option>';
+            sortedCars.forEach(car => {
+                const option = document.createElement('option');
+                option.value = car.price;
+                option.dataset.name = car.name;
+                option.textContent = `${car.name} ($${car.price.toLocaleString()})`;
+                allInputs.fahrzeugSelect.appendChild(option);
+            });
+
+            // Customers
+            const customers = ls.get('lsc_customers');
+            allInputs.kundenSelect.innerHTML = '<option value="">-- Kunden auswählen --</option>';
+            customers.forEach((customer, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = customer.name;
+                allInputs.kundenSelect.appendChild(option);
+            });
+
+            // Employees
+            const employees = ls.get('lsc_employees');
+            allInputs.mitarbeiterSelect.innerHTML = '<option value="">-- Mitarbeiter auswählen --</option>';
+            employees.forEach((employee, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = employee.name;
+                allInputs.mitarbeiterSelect.appendChild(option);
+            });
+        }
+
+        function renderOptions() {
+            const tuningData = ls.get('lsc_tuningData');
+            allInputs.tuningOptions.innerHTML = '';
+            tuningData.forEach(category => {
+                const card = document.createElement('div');
+                card.className = 'card';
+
+                let optionsHtml = category.options.map(opt => {
+                    if (opt.type === 'select') {
+                        return createSelectHTML(opt, category.category);
+                    } else { // 'checkbox' and 'color'
+                        return createCheckboxHTML(opt, opt.type);
+                    }
+                }).join('');
+
+                const header = document.createElement('h2');
+                header.className = 'flex justify-between items-center cursor-pointer text-2xl font-semibold mb-4 border-b border-gray-600 pb-2';
+                header.innerHTML = `
+                    <span>${category.category}</span>
+                    <svg class="arrow w-6 h-6 transform transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                `;
+
+                const optionsContainer = document.createElement('div');
+                optionsContainer.className = 'category-options space-y-2';
+                optionsContainer.innerHTML = optionsHtml;
+                optionsContainer.style.maxHeight = '0';
+                optionsContainer.style.overflow = 'hidden';
+                optionsContainer.style.transition = 'max-height 0.5s ease-in-out';
+
+                header.addEventListener('click', () => {
+                    const arrow = header.querySelector('.arrow');
+                    if (optionsContainer.style.maxHeight === '0px') {
+                        optionsContainer.style.maxHeight = optionsContainer.scrollHeight + 'px';
+                        arrow.style.transform = 'rotate(180deg)';
+                    } else {
+                        optionsContainer.style.maxHeight = '0px';
+                        arrow.style.transform = 'rotate(0deg)';
+                    }
+                });
+
+                card.appendChild(header);
+                card.appendChild(optionsContainer);
+                allInputs.tuningOptions.appendChild(card);
+            });
+
+            addEventListenersToOptions();
+        }
+        
+        function createCheckboxHTML(opt, type) {
+            let additionalInput = '';
+            if (type === 'color') {
+                additionalInput = `<input type="text" id="opt-${opt.id}-color" placeholder="Farb-Nr." class="p-2 w-24 text-sm tuning-option-extra">`;
+            }
+            return `
+                <div class="flex items-center justify-between p-2 rounded-md hover:bg-gray-700/50">
+                    <label for="opt-${opt.id}" class="flex-grow cursor-pointer">${opt.name}</label>
+                    <div class="flex items-center gap-2">
+                        ${additionalInput}
+                        <input type="checkbox" id="opt-${opt.id}" class="w-5 h-5 tuning-option" data-type="checkbox" data-id="${opt.id}">
+                    </div>
+                </div>`;
+        }
+
+        function createSelectHTML(option, categoryName) {
+            let selectOptions = `<option value="">-- ${option.name} auswählen --</option>`;
+            selectOptions += option.options.map((level, index) => `<option value="${index}">${level.name}</option>`).join('');
+            return `
+                <div class="p-2">
+                    <select id="opt-${option.id}" class="p-2 w-full tuning-option" data-type="select" data-category="${categoryName}" data-option-id="${option.id}">
+                        ${selectOptions}
+                    </select>
+                </div>
+            `;
+        }
+        
+        function addEventListenersToOptions() {
+            document.querySelectorAll('.tuning-option, .tuning-option-extra, #rabatt-input').forEach(el => {
+                el.addEventListener('change', updateRechnung);
+                el.addEventListener('keyup', updateRechnung);
+            });
+        }
+
+        function updateRechnung() {
+            const selectedCarOption = allInputs.fahrzeugSelect.options[allInputs.fahrzeugSelect.selectedIndex];
+            if (!selectedCarOption || !selectedCarOption.value) {
+                allInputs.rechnungItems.innerHTML = '<p class="text-gray-400">Bitte Fahrzeug auswählen...</p>';
+                return;
+            }
+
+            const carPrice = parseFloat(selectedCarOption.value);
+            const priceTier = getVehiclePriceTier(carPrice);
+            let zwischensumme = 0;
+            let gesamtZeit = 0;
+            let rechnungHtml = '';
+
+            const { parts } = getSelectedParts(priceTier);
+
+            parts.forEach(part => {
+                zwischensumme += part.price;
+                gesamtZeit = Math.max(gesamtZeit, part.time); // KORRIGIERTE LOGIK
+                rechnungHtml += createRechnungItem(part.name, part.price, part.time);
+            });
+
+            const rabattProzent = parseFloat(allInputs.rabattInput.value) || 0;
+            const rabattBetrag = (zwischensumme * rabattProzent) / 100;
+            const gesamtPreis = zwischensumme - rabattBetrag;
+
+            allInputs.rechnungItems.innerHTML = rechnungHtml || '<p class="text-gray-400">Keine Teile ausgewählt.</p>';
+            allInputs.zwischensummePreis.textContent = `$${zwischensumme.toLocaleString()}`;
+            allInputs.rabattBetrag.textContent = `-$${rabattBetrag.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            allInputs.gesamtPreis.textContent = `$${gesamtPreis.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            allInputs.gesamtZeit.textContent = `${gesamtZeit.toFixed(1)} h`;
+        }
+
+        function getSelectedParts(priceTier) {
+            const tuningData = ls.get('lsc_tuningData');
+            let parts = [];
+            document.querySelectorAll('.tuning-option[data-type="checkbox"]:checked').forEach(checkbox => {
+                const optionId = checkbox.dataset.id;
+                const optionData = findOptionById(optionId);
+                if (optionData) {
+                    let name = optionData.name;
+                    const colorInput = document.getElementById(`opt-${optionId}-color`);
+                    if (colorInput && colorInput.value) name += ` (#${colorInput.value.trim()})`;
+                    parts.push({ name, price: optionData.prices[priceTier], time: optionData.time, colorCode: colorInput ? colorInput.value.trim() : null });
+                }
+            });
+            document.querySelectorAll('.tuning-option[data-type="select"]').forEach(select => {
+                if (select.value) {
+                    const categoryName = select.dataset.category;
+                    const optionId = select.dataset.optionId;
+                    const optionIndex = parseInt(select.value, 10);
+                    
+                    const categoryData = tuningData.find(c => c.category === categoryName);
+                    const selectData = categoryData.options.find(o => o.id === optionId);
+                    const levelData = selectData.options[optionIndex];
+
+                    parts.push({ name: `${selectData.name}: ${levelData.name}`, price: levelData.prices[priceTier], time: levelData.time });
+                }
+            });
+            return { parts };
+        }
+
+        function findOptionById(id) {
+            const tuningData = ls.get('lsc_tuningData');
+            for (const category of tuningData) {
+                for (const option of category.options) {
+                    if (option.id === id) {
+                        return option;
+                    }
+                }
+            }
+            return null;
+        }
+
+        function createRechnungItem(name, price, time) {
+            return `<div class="rechnung-item text-sm"><span class="flex-grow pr-2">${name}</span><span class="w-16 text-right text-gray-400">${time.toFixed(1)} h</span><span class="w-24 text-right font-semibold text-green-400">$${price.toLocaleString()}</span></div>`;
+        }
+
+        function bookTuning() {
+            const zwischensumme = parseFloat(allInputs.zwischensummePreis.textContent.replace(/[$,]/g, ''));
+            if (zwischensumme === 0) { alert("Bitte wählen Sie Tuningteile aus."); return; }
+            
+            const mitarbeiterIndex = allInputs.mitarbeiterSelect.value;
+            if (!mitarbeiterIndex) { alert("Bitte einen Mitarbeiter auswählen."); return; }
+            const mitarbeiter = ls.get('lsc_employees')[mitarbeiterIndex].name;
+
+            const kundenIndex = allInputs.kundenSelect.value;
+            const kunde = kundenIndex ? ls.get('lsc_customers')[kundenIndex].name : 'Laufkundschaft';
+
+            const selectedCarOption = allInputs.fahrzeugSelect.options[allInputs.fahrzeugSelect.selectedIndex];
+            const carPrice = parseFloat(selectedCarOption.value);
+            const priceTier = getVehiclePriceTier(carPrice);
+            const { parts } = getSelectedParts(priceTier);
+            
+            const now = new Date();
+            const rechnungsNummer = ls.get('lsc_rechnungsNummer', 259);
+            const rabattProzent = parseFloat(allInputs.rabattInput.value) || 0;
+            const rabattBetrag = (zwischensumme * rabattProzent) / 100;
+            const einnahmen = zwischensumme - rabattBetrag;
+            const gesamtzeit = parseFloat(allInputs.gesamtZeit.textContent);
+
+            const abholzeit = new Date(now.getTime() + gesamtzeit * 60 * 60 * 1000);
+
+            const order = {
+                id: rechnungsNummer,
+                date: now.toISOString(),
+                abholzeit: abholzeit.toISOString(),
+                mitarbeiter,
+                kundenname: kunde,
+                fahrzeug: selectedCarOption.dataset.name,
+                fahrzeugwert: carPrice,
+                einnahmen: einnahmen,
+                gewinn: einnahmen - FESTE_AUSGABEN,
+                gesamtzeit: gesamtzeit,
+                teile: parts,
+                rabattProzent,
+                rabattBetrag,
+                zwischensumme
+            };
+            
+            const archivedOrders = ls.get('lsc_archivedOrders');
+            archivedOrders.unshift(order);
+            ls.set('lsc_archivedOrders', archivedOrders);
+            ls.set('lsc_rechnungsNummer', rechnungsNummer + 1);
+
+            renderAllTables();
+            resetForm();
+        }
+
+        function renderAllTables() {
+            const customers = ls.get('lsc_customers');
+            const employees = ls.get('lsc_employees');
+            const archivedOrders = ls.get('lsc_archivedOrders');
+            const now = new Date();
+
+            // Customers Table
+            allInputs.customerTable.innerHTML = '';
+            customers.forEach((c, index) => {
+                const row = allInputs.customerTable.insertRow();
+                row.innerHTML = `<td class="p-3">${c.name}</td><td class="p-3">${c.phone}</td><td class="p-3">${c.discount}%</td>
+                <td class="p-3 space-x-2"><button class="text-indigo-400" onclick="editCustomer(${index})">Edit</button><button class="text-red-400" onclick="deleteCustomer(${index})">X</button></td>`;
+            });
+
+            // Employees Table
+            allInputs.employeeTable.innerHTML = '';
+            employees.forEach((e, index) => {
+                const row = allInputs.employeeTable.insertRow();
+                row.innerHTML = `<td class="p-3">${e.name}</td>
+                <td class="p-3 space-x-2"><button class="text-indigo-400" onclick="editEmployee(${index})">Edit</button><button class="text-red-400" onclick="deleteEmployee(${index})">X</button></td>`;
+            });
+
+            // Order Tables
+            allInputs.finanzTabelle.innerHTML = '';
+            allInputs.archivTabelle.innerHTML = '';
+            allInputs.abholbereitTabelle.innerHTML = '';
+            archivedOrders.forEach((order, index) => {
+                const orderDate = new Date(order.date);
+                const abholDate = new Date(order.abholzeit);
+
+                // Finanz-Tabelle
+                const finanzRow = allInputs.finanzTabelle.insertRow();
+                finanzRow.className = 'text-sm';
+                finanzRow.innerHTML = `
+                    <td class="p-3">SMBN-${order.id}</td><td class="p-3">${orderDate.toLocaleDateString('de-DE')}</td><td class="p-3">${order.mitarbeiter}</td>
+                    <td class="p-3 text-green-400">$${order.einnahmen.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    <td class="p-3 font-bold ${order.gewinn >= 0 ? 'profit-positive' : 'profit-negative'}">$${order.gewinn.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    <td class="p-3"><button class="text-indigo-400 hover:underline" data-order-index="${index}">Details</button></td>`;
+
+                // Archiv-Tabelle
+                const archivRow = allInputs.archivTabelle.insertRow();
+                archivRow.className = 'text-sm';
+                archivRow.innerHTML = `
+                    <td class="p-3">SMBN-${order.id}</td><td class="p-3">${order.kundenname}</td><td class="p-3">${order.fahrzeug}</td>
+                    <td class="p-3">${abholDate.toLocaleString('de-DE')}</td>
+                    <td class="p-3 text-green-400">$${order.einnahmen.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    <td class="p-3"><button class="text-indigo-400 hover:underline" data-order-index="${index}">Details</button></td>`;
+                
+                // Abholbereit-Tabelle
+                if (abholDate <= now) {
+                    const abholRow = allInputs.abholbereitTabelle.insertRow();
+                    abholRow.className = 'text-sm';
+                    abholRow.innerHTML = `
+                        <td class="p-3">SMBN-${order.id}</td><td class="p-3">${order.kundenname}</td><td class="p-3">${order.fahrzeug}</td>
+                        <td class="p-3">${abholDate.toLocaleString('de-DE')}</td>
+                        <td class="p-3"><button class="text-indigo-400 hover:underline" data-order-index="${index}">Details</button></td>`;
+                }
+            });
+        }
+        
+        function showOrderDetails(index) {
+            const archivedOrders = ls.get('lsc_archivedOrders');
+            const order = archivedOrders[index];
+            allInputs.modalTitle.textContent = `Details für Auftrag SMBN-${order.id}`;
+            let partsHtml = order.teile.map(p => createRechnungItem(p.name, p.price, p.time)).join('');
+            allInputs.modalBody.innerHTML = `
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <p><strong>Bestellt am:</strong> ${new Date(order.date).toLocaleString('de-DE')}</p>
+                    <p><strong>Abholbereit ab:</strong> ${new Date(order.abholzeit).toLocaleString('de-DE')}</p>
+                    <p><strong>Mitarbeiter:</strong> ${order.mitarbeiter}</p>
+                    <p><strong>Kunde:</strong> ${order.kundenname}</p>
+                    <p><strong>Fahrzeug:</strong> ${order.fahrzeug}</p>
+                </div>
+                <div class="border-t border-gray-600 pt-4 mt-4"><h3 class="font-bold mb-2">Verbaute Teile</h3><div class="max-h-64 overflow-y-auto">${partsHtml}</div></div>
+                <div class="border-t-2 border-indigo-500 pt-4 mt-4 text-right">
+                    <p>Zwischensumme: $${order.zwischensumme.toLocaleString()}</p>
+                    <p class="text-orange-400">Rabatt (${order.rabattProzent}%): -$${order.rabattBetrag.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    <p class="text-xl font-bold text-green-400">Gesamtpreis: $${order.einnahmen.toLocaleString(undefined, {minimumFractionDigits: 2})}</p>
+                    <p class="text-lg"><strong>Gesamtzeit:</strong> ${order.gesamtzeit.toFixed(1)} h</p>
+                </div>`;
+            allInputs.detailModal.classList.remove('hidden');
+        }
+
+        function resetForm() {
+            allInputs.auftragsForm.reset();
+            updateRechnung();
+        }
+
+        // --- Management Functions ---
+        function editCustomer(index) {
+            const customers = ls.get('lsc_customers');
+            const customer = customers[index];
+            allInputs.customerEditIndex.value = index;
+            allInputs.newCustomerName.value = customer.name;
+            allInputs.newCustomerPhone.value = customer.phone;
+            allInputs.newCustomerDiscount.value = customer.discount;
+            allInputs.customerFormTitle.textContent = "Kunden bearbeiten";
+            allInputs.customerSubmitButton.textContent = "Änderungen speichern";
+        }
+
+        function deleteCustomer(index) {
+            if (confirm("Diesen Kunden wirklich löschen?")) {
+                let customers = ls.get('lsc_customers');
+                customers.splice(index, 1);
+                ls.set('lsc_customers', customers);
+                renderAllTables();
+                populateAllDropdowns();
+            }
+        }
+
+        function editEmployee(index) {
+            const employees = ls.get('lsc_employees');
+            const employee = employees[index];
+            allInputs.employeeEditIndex.value = index;
+            allInputs.newEmployeeName.value = employee.name;
+            allInputs.employeeFormTitle.textContent = "Mitarbeiter bearbeiten";
+            allInputs.employeeSubmitButton.textContent = "Änderungen speichern";
+        }
+
+        function deleteEmployee(index) {
+            if (confirm("Diesen Mitarbeiter wirklich löschen?")) {
+                let employees = ls.get('lsc_employees');
+                employees.splice(index, 1);
+                ls.set('lsc_employees', employees);
+                renderAllTables();
+                populateAllDropdowns();
+            }
+        }
+
+        function initializeData() {
+            if (!localStorage.getItem('lsc_carDatabase')) {
+                ls.set('lsc_carDatabase', initialCarDatabase);
+            }
+            if (!localStorage.getItem('lsc_tuningData')) {
+                ls.set('lsc_tuningData', initialTuningData);
+            }
+        }
+
+        function renderPriceManagementTab() {
+            const carData = ls.get('lsc_carDatabase');
+            const tuningData = ls.get('lsc_tuningData');
+            
+            // Cars
+            let carHtml = Object.keys(carData).sort((a,b) => carData[a].name.localeCompare(carData[b].name)).map(key => `
+                <div class="flex items-center justify-between p-2 rounded-md car-price-row">
+                    <span class="car-name">${carData[key].name}</span>
+                    <input type="number" value="${carData[key].price}" data-key="${key}" class="p-2 price-input car-price-input">
+                </div>
+            `).join('');
+            allInputs.carPricesContainer.innerHTML = carHtml;
+
+            // Parts
+            let partHtml = tuningData.map((category, catIndex) => {
+                let optionsHtml = category.options.map((option, optIndex) => {
+                    if (option.type === 'select') {
+                        return option.options.map((level, levelIndex) => {
+                            let priceInputs = level.prices.map((price, priceIndex) => `
+                                <td><input type="number" value="${price}" data-cat="${catIndex}" data-opt="${optIndex}" data-level="${levelIndex}" data-price="${priceIndex}" class="p-2 price-input part-price-input"></td>
+                            `).join('');
+                            return `<tr><td class="p-2">${option.name}: ${level.name}</td>${priceInputs}</tr>`;
+                        }).join('');
+                    } else {
+                        let priceInputs = option.prices.map((price, priceIndex) => `
+                            <td><input type="number" value="${price}" data-cat="${catIndex}" data-opt="${optIndex}" data-price="${priceIndex}" class="p-2 price-input part-price-input"></td>
+                        `).join('');
+                        return `<tr><td class="p-2">${option.name}</td>${priceInputs}</tr>`;
+                    }
+                }).join('');
+
+                return `
+                    <div class="mb-4">
+                        <h4 class="text-xl font-semibold mb-2">${category.category}</h4>
+                        <table class="w-full text-sm">
+                            <thead class="text-xs text-gray-400"><tr>
+                                <th class="p-2 text-left">Teil</th><th class="p-2 text-right">&lt;50k</th><th class="p-2 text-right">&gt;50k</th><th class="p-2 text-right">&gt;100k</th><th class="p-2 text-right">&gt;150k</th><th class="p-2 text-right">&gt;200k</th>
+                            </tr></thead>
+                            <tbody>${optionsHtml}</tbody>
+                        </table>
+                    </div>
+                `;
+            }).join('');
+            allInputs.partPricesContainer.innerHTML = partHtml;
+        }
+
+        function saveAllPrices() {
+            const carData = ls.get('lsc_carDatabase');
+            document.querySelectorAll('.car-price-input').forEach(input => {
+                carData[input.dataset.key].price = parseFloat(input.value) || 0;
+            });
+            ls.set('lsc_carDatabase', carData);
+
+            const tuningData = ls.get('lsc_tuningData');
+            document.querySelectorAll('.part-price-input').forEach(input => {
+                const {cat, opt, level, price} = input.dataset;
+                if (level) { // It's a select option's level
+                    tuningData[cat].options[opt].options[level].prices[price] = parseFloat(input.value) || 0;
+                } else { // It's a checkbox or color option
+                    tuningData[cat].options[opt].prices[price] = parseFloat(input.value) || 0;
+                }
+            });
+            ls.set('lsc_tuningData', tuningData);
+
+            alert('Alle Preise wurden gespeichert!');
+            populateAllDropdowns();
+            renderOptions();
+        }
+
+        // --- EVENT LISTENER ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Cache all DOM elements
+            const ids = ['kunden-select', 'fahrzeug-select', 'mitarbeiter-select', 'rabatt-input', 'tuning-options', 'rechnung-items', 'zwischensumme-preis', 'rabatt-betrag', 'gesamt-preis', 'gesamt-zeit', 'reset-button', 'book-button', 'add-customer-form', 'new-customer-name', 'new-customer-phone', 'new-customer-discount', 'customer-table', 'add-employee-form', 'new-employee-name', 'employee-table', 'finanz-tabelle', 'archiv-tabelle', 'abholbereit-tabelle', 'detail-modal', 'modal-title', 'modal-close-button', 'modal-body', 'auftrags-form', 'customer-edit-index', 'customer-form-title', 'customer-submit-button', 'employee-edit-index', 'employee-form-title', 'employee-submit-button', 'save-all-prices-button', 'car-prices-container', 'part-prices-container', 'car-price-search'];
+            ids.forEach(id => {
+                const camelCaseId = id.replace(/-[a-z]/g, m => m[1].toUpperCase());
+                allInputs[camelCaseId] = document.getElementById(id);
+            });
+            
+            initializeData();
+            populateAllDropdowns();
+            renderOptions();
+            renderAllTables();
+            renderPriceManagementTab();
+            setInterval(renderAllTables, 60000); // Update "Abholbereit" table every minute
+            
+            // Tab-Umschaltung
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const tabId = button.dataset.tab;
+                    document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    button.classList.add('active');
+                    document.getElementById(tabId).classList.add('active');
+                });
+            });
+
+            // Rechner-Events
+            allInputs.fahrzeugSelect.addEventListener('change', updateRechnung);
+            allInputs.kundenSelect.addEventListener('change', (e) => {
+                const customers = ls.get('lsc_customers');
+                const customer = customers[e.target.value];
+                allInputs.rabattInput.value = customer ? customer.discount : 0;
+                updateRechnung();
+            });
+            allInputs.bookButton.addEventListener('click', bookTuning);
+            allInputs.resetButton.addEventListener('click', resetForm);
+
+            // Kunden-Events
+            allInputs.addCustomerForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const customers = ls.get('lsc_customers');
+                const name = allInputs.newCustomerName.value;
+                const phone = allInputs.newCustomerPhone.value;
+                const discount = parseFloat(allInputs.newCustomerDiscount.value) || 0;
+                const index = allInputs.customerEditIndex.value;
+
+                if (index) { // Editing
+                    customers[index] = { name, phone, discount };
+                } else { // Adding
+                    customers.push({ name, phone, discount });
+                }
+                
+                ls.set('lsc_customers', customers);
+                renderAllTables();
+                populateAllDropdowns();
+                allInputs.addCustomerForm.reset();
+                allInputs.customerEditIndex.value = '';
+                allInputs.customerFormTitle.textContent = "Neuen Kunden anlegen";
+                allInputs.customerSubmitButton.textContent = "Kunden hinzufügen";
+            });
+
+            // Mitarbeiter-Events
+            allInputs.addEmployeeForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const employees = ls.get('lsc_employees');
+                const name = allInputs.newEmployeeName.value;
+                const index = allInputs.employeeEditIndex.value;
+
+                if (index) { // Editing
+                    employees[index] = { name };
+                } else { // Adding
+                    employees.push({ name });
+                }
+
+                ls.set('lsc_employees', employees);
+                renderAllTables();
+                populateAllDropdowns();
+                allInputs.addEmployeeForm.reset();
+                allInputs.employeeEditIndex.value = '';
+                allInputs.employeeFormTitle.textContent = "Neuen Mitarbeiter anlegen";
+                allInputs.employeeSubmitButton.textContent = "Mitarbeiter hinzufügen";
+            });
+
+            // Preis-Events
+            allInputs.saveAllPricesButton.addEventListener('click', saveAllPrices);
+            allInputs.carPriceSearch.addEventListener('keyup', e => {
+                const searchTerm = e.target.value.toLowerCase();
+                document.querySelectorAll('.car-price-row').forEach(row => {
+                    const carName = row.querySelector('.car-name').textContent.toLowerCase();
+                    row.style.display = carName.includes(searchTerm) ? 'flex' : 'none';
+                });
+            });
+
+            // Modal-Events
+            allInputs.modalCloseButton.addEventListener('click', () => allInputs.detailModal.classList.add('hidden'));
+            document.body.addEventListener('click', e => {
+                if (e.target.closest('button[data-order-index]')) {
+                    showOrderDetails(e.target.closest('button[data-order-index]').dataset.orderIndex);
+                }
+            });
+
+            updateRechnung();
+        });
+
+    </script>
+</body>
+</html>
